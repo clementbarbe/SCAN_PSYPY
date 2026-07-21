@@ -356,4 +356,59 @@ _BUILTIN_DEFAULTS: dict[str, dict] = {
             },
         },
     },
+
+    'motor': {
+        'task_name': 'motor',
+        'display_name': 'Motor SCAN',
+        'stimulus': {
+            'fixation_height': 0.12, 'instruction_height': 0.08,
+            'image_size': [0.4, 0.4], 'image_y': 0.15, 'text_y': -0.25,
+            'green_color': [0, 1, 0], 'blink_freq': 1.25,
+        },
+        'images': {
+            'right_hand': 'stimuli/images/rh.jpg',
+            'left_hand': 'stimuli/images/lh.jpg',
+            'right_foot': 'stimuli/images/rf.jpg',
+        },
+        'conditions_task1': [
+            {'name': 'Right Hand', 'images': ['right_hand']},
+            {'name': 'Left Hand', 'images': ['left_hand']},
+            {'name': 'Right Foot', 'images': ['right_foot']},
+        ],
+        'conditions_task2': [
+            {'name': 'Right Hand', 'images': ['right_hand']},
+            {'name': 'Left Hand', 'images': ['left_hand']},
+            {'name': 'Right Foot', 'images': ['right_foot']},
+            {'name': 'Right Hand + Left Hand', 'images': ['right_hand', 'left_hand']},
+            {'name': 'Right Hand + Right Foot', 'images': ['right_hand', 'right_foot']},
+            {'name': 'Left Hand + Right Foot', 'images': ['left_hand', 'right_foot']},
+        ],
+        'ttl_codes': {
+            'instruction_onset': 210, 'movement_onset': 220, 'rest_onset': 230,
+        },
+        'designs': {
+            **{i: {
+                'name': f'Task 1 Run {i}', 'task_type': 1, 'run_number': i,
+                'total_duration': 202.0, 'pre_start_wait': 5.0,
+                'n_trials': 12, 'reps_per_condition': 4,
+                'instruction_durations': [2.25, 2.50, 2.75],
+                'movement_duration': 8.0, 'rest_duration': 6.0,
+                'final_rest_duration': 12.0, 'inter_run_rest': 90.0,
+                'rest_duration_design': 0.0, 'instruction_duration': 0.0,
+                'pre_block_fixation': 0.0,
+                'blocks': [{'n_trials': 12}],
+            } for i in [1, 2, 3]},
+            **{i+3: {
+                'name': f'Task 2 Run {i}', 'task_type': 2, 'run_number': i,
+                'total_duration': 630.0, 'pre_start_wait': 5.0,
+                'n_trials': 32, 'instruction_duration_fixed': 1.5,
+                'planning_duration_mean': 4.0, 'planning_jitter': 0.5,
+                'movement_duration': 8.0, 'rest_duration': 6.0,
+                'final_rest_duration': 12.0, 'inter_run_rest': 120.0,
+                'rest_duration_design': 0.0, 'instruction_duration': 0.0,
+                'pre_block_fixation': 0.0,
+                'blocks': [{'n_trials': 32}],
+            } for i in [1, 2, 3]},
+        },
+    },
 }

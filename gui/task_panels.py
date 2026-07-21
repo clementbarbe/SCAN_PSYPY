@@ -297,3 +297,158 @@ class OddballPanel(QWidget):
                 'rest_duration': 5.0,
             },
         })
+
+# ═════════════════════════════════════════════════════════════════════
+# Motor SCAN
+# ═════════════════════════════════════════════════════════════════════
+
+from PyQt6.QtCore import QTimer, QElapsedTimer
+
+
+@register_panel('SCAN')
+class MotorPanel(QWidget):
+    TASK = 'motor'
+
+    def __init__(self, menu):
+        super().__init__()
+        self.menu = menu
+        self._chrono_timer = QTimer(self)
+        self._chrono_timer.setInterval(100)
+        self._chrono_timer.timeout.connect(self._update_chrono)
+        self._elapsed = QElapsedTimer()
+        self._target_rest = 0
+        self._last_task_type = 0
+        self._build()
+
+    def _build(self):
+        lo = QVBoxLayout(self)
+        lo.setSpacing(10)
+
+        # ── Task 1 ───────────────────────────────────────────────────
+        t1_group = QGroupBox("Tache 1 — 3 conditions (RH/LH/RF)")
+        t1 = QGridLayout(t1_group)
+        t1.setSpacing(6)
+
+        info1 = QLabel("12 essais/run | 202s | repos inter-run: 1min30")
+        info1.setStyleSheet("color: #808080; font-size: 11px;")
+        t1.addWidget(info1, 0, 0, 1, 3)
+
+        for i in range(3):
+            btn = QPushButton(f"Run {i+1}")
+            btn.setObjectName("run")
+            btn.setToolTip(f"Task 1 Run {i+1} — 3min22")
+            btn.clicked.connect(lambda _, r=i+1: self._run_task1(r))
+            t1.addWidget(btn, 1, i)
+
+        lo.addWidget(t1_group)
+
+        # ── Task 2 ───────────────────────────────────────────────────
+        t2_group = QGroupBox("Tache 2 — 6 conditions (simples + combinees)")
+        t2 = QGridLayout(t2_group)
+        t2.setSpacing(6)
+
+        info2 = QLabel("32 essais/run | 630s | repos inter-run: 2min")
+        info2.setStyleSheet("color: #808080; font-size: 11px;")
+        t2.addWidget(info2, 0, 0, 1, 3)
+
+        for i in range(3):
+            btn = QPushButton(f"Run {i+1}")
+            btn.setObjectName("run")
+            btn.setToolTip(f"Task 2 Run {i+1} — 10min30")
+            btn.clicked.connect(lambda _, r=i+1: self._run_task2(r))
+            t2.addWidget(btn, 1, i)
+
+        lo.addWidget(t2_group)
+
+        # ── Chronometre ──────────────────────────────────────────────
+        chrono_group = QGroupBox("Chronometre repos inter-run")
+        cl = QVBoxLayout(chrono_group)
+
+        self._chrono_label = QLabel("--:--")
+        self._chrono_label.setStyleSheet(
+            "font-size: 28px; font-weight: bold; "
+            "font-family: monospace; padding: 8px;"
+        )
+        self._chrono_label.setAlignment(
+            __import__('PyQt6.QtCore', fromlist=['Qt']).Qt.AlignmentFlag.AlignCenter
+        )
+        cl.addWidget(self._chrono_label)
+
+        self._chrono_status = QLabel("")
+        self._chrono_status.setStyleSheet(
+            "color: #808080; font-size: 11px; padding: 2px;"
+        )
+        self._chrono_status.setAlignment(
+            __import__('PyQt6.QtCore', fromlist=['Qt']).Qt.AlignmentFlag.AlignCenter
+        )
+        cl.addWidget(self._chrono_status)
+
+        lo.addWidget(chrono_group)
+        lo.addStretch()
+
+    def _run_task1(self, run_num):
+        design_id = run_num  # designs 1, 2, 3
+        self._last_task_type = 1
+        self._target_rest = 90
+        self.menu.run_experiment({
+            'task_name': self.TASK,
+            'design_id': design_id,
+        })
+        # Start chrono after experiment returns
+        self._start_chrono()
+
+    def _run_task2(self, run_num):
+        design_id = run_num + 3  # designs 4, 5, 6
+        self._last_task_type = 2
+        self._target_rest = 120
+        self.menu.run_experiment({
+            'task_name': self.TASK,
+            'design_id': design_id,
+        })
+        self._start_chrono()
+
+    def _start_chrono(self):
+        """Start rest countdown after a run ends."""
+        self._elapsed.start()
+        self._chrono_timer.start()
+        task_label = f"Tache {self._last_task_type}"
+        target_str = f"{self._target_rest // 60}min{self._target_rest % 60:02d}s"
+        self._chrono_status.setText(
+            f"{task_label} termine — repos recommande: {target_str}"
+        )
+        self._chrono_status.setStyleSheet(
+            "color: #e08000; font-size: 11px; padding: 2px;"
+        )
+
+    def _update_chrono(self):
+        """Update chrono display every 100ms."""
+        elapsed_ms = self._elapsed.elapsed()
+        elapsed_s = elapsed_ms / 1000.0
+        mins = int(elapsed_s) // 60
+        secs = int(elapsed_s) % 60
+        tenths = int((elapsed_s % 1) * 10)
+
+        self._chrono_label.setText(f"{mins:02d}:{secs:02d}.{tenths}")
+
+        if elapsed_s >= self._target_rest:
+            self._chrono_label.setStyleSheet(
+                "font-size: 28px; font-weight: bold; "
+                "font-family: monospace; padding: 8px; "
+                "color: #00a000;"
+            )
+            self._chrono_status.setText("Repos termine — pret pour le run suivant")
+            self._chrono_status.setStyleSheet(
+                "color: #00a000; font-size: 11px; padding: 2px;"
+            )
+        else:
+            remaining = self._target_rest - elapsed_s
+            r_mins = int(remaining) // 60
+            r_secs = int(remaining) % 60
+            self._chrono_label.setStyleSheet(
+                "font-size: 28px; font-weight: bold; "
+                "font-family: monospace; padding: 8px; "
+                "color: #e0e0e0;"
+            )
+            self._chrono_status.setText(
+                f"Reste: {r_mins:02d}:{r_secs:02d}"
+            )
