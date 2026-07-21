@@ -376,13 +376,14 @@ _BUILTIN_DEFAULTS: dict[str, dict] = {
             {'name': 'Right Foot', 'images': ['right_foot']},
         ],
         'conditions_task2': [
-            {'name': 'Right Hand', 'images': ['right_hand']},
-            {'name': 'Left Hand', 'images': ['left_hand']},
-            {'name': 'Right Foot', 'images': ['right_foot']},
-            {'name': 'Right Hand + Left Hand', 'images': ['right_hand', 'left_hand']},
+            {'name': 'Right Hand',              'images': ['right_hand']},
+            {'name': 'Left Hand',               'images': ['left_hand']},
+            {'name': 'Right Foot',              'images': ['right_foot']},
+            {'name': 'Left Hand + Right Hand',  'images': ['left_hand', 'right_hand']},
+            {'name': 'Left Hand + Right Foot',  'images': ['left_hand', 'right_foot']},
             {'name': 'Right Hand + Right Foot', 'images': ['right_hand', 'right_foot']},
-            {'name': 'Left Hand + Right Foot', 'images': ['left_hand', 'right_foot']},
         ],
+       
         'ttl_codes': {
             'instruction_onset': 210, 'movement_onset': 220, 'rest_onset': 230,
         },

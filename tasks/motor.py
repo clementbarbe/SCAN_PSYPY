@@ -408,7 +408,46 @@ class MotorTask(BaseTask):
 
     def _show_instruction(self, name: str, image_keys: list[str],
                           duration: float) -> None:
+        """
+        Show condition name + image(s).
+
+        Single image: centered.
+        Two images: left body part on left side, right body part on right side.
+            - left_hand  → always left position
+            - right_hand → always right position
+            - right_foot → always right position
+        """
         deadline = self.clock.time + duration
+
+        # Determine image positions for dual display
+        if len(image_keys) == 2:
+            # Sort: left-side body parts go left, right-side go right
+            left_keys = {'left_hand'}
+            right_keys = {'right_hand', 'right_foot'}
+
+            img_left = None
+            img_right = None
+
+            for key in image_keys:
+                if key in left_keys:
+                    img_left = self._images.get(key)
+                elif key in right_keys:
+                    img_right = self._images.get(key)
+
+            # Fallback if both are same side (shouldn't happen)
+            if img_left is None and img_right is None:
+                img_left = self._images.get(image_keys[0])
+                img_right = self._images.get(image_keys[1])
+            elif img_left is None:
+                img_left = self._images.get(
+                    [k for k in image_keys
+                     if self._images.get(k) is not img_right][0]
+                )
+            elif img_right is None:
+                img_right = self._images.get(
+                    [k for k in image_keys
+                     if self._images.get(k) is not img_left][0]
+                )
 
         while self.clock.time < deadline:
             if len(image_keys) == 1:
@@ -416,15 +455,14 @@ class MotorTask(BaseTask):
                 if img:
                     img.pos = (0, 0.15)
                     img.draw()
+
             elif len(image_keys) >= 2:
-                img1 = self._images.get(image_keys[0])
-                img2 = self._images.get(image_keys[1])
-                if img1:
-                    img1.pos = (-0.25, 0.15)
-                    img1.draw()
-                if img2:
-                    img2.pos = (0.25, 0.15)
-                    img2.draw()
+                if img_left:
+                    img_left.pos = (-0.25, 0.15)
+                    img_left.draw()
+                if img_right:
+                    img_right.pos = (0.25, 0.15)
+                    img_right.draw()
 
             self._instr_text.text = name
             self._instr_text.draw()
