@@ -96,7 +96,7 @@ designs:
     name: "Task 2 Run 1"
     task_type: 2
     run_number: 1
-    total_duration: 630.0
+    total_duration: 635.0
     pre_start_wait: 5.0
     n_trials: 32
     instruction_duration_fixed: 1.5
@@ -116,7 +116,7 @@ designs:
     name: "Task 2 Run 2"
     task_type: 2
     run_number: 2
-    total_duration: 630.0
+    total_duration: 635.0
     pre_start_wait: 5.0
     n_trials: 32
     instruction_duration_fixed: 1.5
@@ -136,7 +136,7 @@ designs:
     name: "Task 2 Run 3"
     task_type: 2
     run_number: 3
-    total_duration: 630.0
+    total_duration: 635.0
     pre_start_wait: 5.0
     n_trials: 32
     instruction_duration_fixed: 1.5

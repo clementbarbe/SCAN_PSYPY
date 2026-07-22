@@ -201,9 +201,16 @@ class MotorTask(BaseTask):
         return schedule
 
     def _build_task1_trials(self) -> list[dict]:
+        """
+        Task 1: instruction durations are EXACTLY 2.25, 2.50, or 2.75s.
+        
+        The total_duration in the config is the FULL run including pre_wait.
+        We verify the total matches but NEVER adjust instruction durations.
+        If there's a mismatch, we adjust rest durations minimally.
+        """
         n_trials = self.design.get('n_trials', 12)
         reps = self.design.get('reps_per_condition', 4)
-        instr_durs_base = self.design.get(
+        instr_durs_pool = self.design.get(
             'instruction_durations', [2.25, 2.50, 2.75]
         )
         mov_dur = self.design.get('movement_duration', 8.0)
@@ -223,32 +230,61 @@ class MotorTask(BaseTask):
             trial_conds, key_func=lambda t: t['name'], max_consecutive=1,
         )
 
-        # Balanced instruction durations
-        assignments = (
-            instr_durs_base * (n_trials // len(instr_durs_base) + 1)
-        )[:n_trials]
+        # Assign EXACT instruction durations (balanced across pool)
+        # 12 trials, 3 durations -> 4 of each
+        assignments = []
+        per_dur = n_trials // len(instr_durs_pool)
+        remainder = n_trials % len(instr_durs_pool)
+        for i, d in enumerate(instr_durs_pool):
+            count = per_dur + (1 if i < remainder else 0)
+            assignments.extend([d] * count)
         random.shuffle(assignments)
 
-        # Auto-adjust for exact total
-        fixed = pre_wait + (n_trials - 1) * rest_dur + final_rest + n_trials * mov_dur
-        diff = total_target - (fixed + sum(assignments))
+        # Verify total and adjust REST (not instructions) if needed
+        task_content = sum(assignments) + n_trials * mov_dur
+        rest_content = (n_trials - 1) * rest_dur + final_rest
+        computed_total = pre_wait + task_content + rest_content
+
+        diff = total_target - computed_total
         if abs(diff) > 0.001:
-            adj = diff / n_trials
-            assignments = [d + adj for d in assignments]
+            # Distribute difference across all rest periods
+            n_rests = n_trials  # (n-1) normal + 1 final
+            adj = diff / n_rests
+            rest_dur_adj = rest_dur + adj
+            final_rest_adj = final_rest + adj
+            self.logger.log(
+                f"Task1 rest adjusted by {adj*1000:+.1f}ms/rest "
+                f"to hit {total_target:.1f}s"
+            )
+        else:
+            rest_dur_adj = rest_dur
+            final_rest_adj = final_rest
 
         trials = []
         for i, (cond, instr_d) in enumerate(zip(trial_conds, assignments)):
+            is_last = (i == n_trials - 1)
             trials.append({
                 'condition': cond,
-                'instruction_duration': round(instr_d, 6),
+                'instruction_duration': instr_d,  # EXACT, never modified
                 'planning_duration': 0.0,
                 'movement_duration': mov_dur,
-                'rest_duration': final_rest if i == n_trials - 1 else rest_dur,
+                'rest_duration': final_rest_adj if is_last else rest_dur_adj,
                 'task_type': 1,
             })
+
         return trials
 
     def _build_task2_trials(self) -> list[dict]:
+        """
+        Task 2: planning = 4.0 ± 0.5s, mean MUST be 4.0s.
+        
+        total_duration is the FULL run including pre_wait (635s).
+        
+        Strategy:
+            1. Generate balanced jitters around 4.0s
+            2. Force the mean to exactly 4.0s
+            3. Adjust rest durations for any remaining difference
+        """
         n_trials = self.design.get('n_trials', 32)
         instr_dur = self.design.get('instruction_duration_fixed', 1.5)
         plan_mean = self.design.get('planning_duration_mean', 4.0)
@@ -256,7 +292,7 @@ class MotorTask(BaseTask):
         mov_dur = self.design.get('movement_duration', 8.0)
         rest_dur = self.design.get('rest_duration', 6.0)
         final_rest = self.design.get('final_rest_duration', 12.0)
-        total_target = self.design.get('total_duration', 630.0)
+        total_target = self.design.get('total_duration', 635.0)
         pre_wait = self.design.get('pre_start_wait', 5.0)
 
         conditions = self._conditions_t2
@@ -274,33 +310,61 @@ class MotorTask(BaseTask):
             trial_conds, key_func=lambda t: t['name'], max_consecutive=1,
         )
 
-        # Planning jitters
+        # Generate planning durations: balanced, mean forced to plan_mean
         plan_durs = [
-            round(random.uniform(plan_mean - plan_jitter,
-                                 plan_mean + plan_jitter), 6)
+            random.uniform(plan_mean - plan_jitter,
+                           plan_mean + plan_jitter)
             for _ in range(n_trials)
         ]
+        
+        # Force mean to exactly plan_mean
+        current_mean = sum(plan_durs) / len(plan_durs)
+        correction = plan_mean - current_mean
+        plan_durs = [round(d + correction, 6) for d in plan_durs]
 
-        # Auto-adjust
-        fixed = (
-            pre_wait + n_trials * instr_dur + n_trials * mov_dur
-            + (n_trials - 1) * rest_dur + final_rest
+        # Clamp to valid range (shouldn't be needed but safety)
+        plan_durs = [
+            max(plan_mean - plan_jitter, min(plan_mean + plan_jitter, d))
+            for d in plan_durs
+        ]
+
+        # Verify and adjust REST for exact total
+        task_content = (
+            n_trials * instr_dur
+            + sum(plan_durs)
+            + n_trials * mov_dur
         )
-        diff = total_target - (fixed + sum(plan_durs))
+        rest_content = (n_trials - 1) * rest_dur + final_rest
+        computed_total = pre_wait + task_content + rest_content
+
+        diff = total_target - computed_total
         if abs(diff) > 0.001:
-            adj = diff / n_trials
-            plan_durs = [d + adj for d in plan_durs]
+            n_rests = n_trials
+            adj = diff / n_rests
+            rest_dur_adj = rest_dur + adj
+            final_rest_adj = final_rest + adj
+            self.logger.log(
+                f"Task2 rest adjusted by {adj*1000:+.1f}ms/rest "
+                f"to hit {total_target:.1f}s"
+            )
+        else:
+            rest_dur_adj = rest_dur
+            final_rest_adj = final_rest
 
         trials = []
         for i, (cond, plan_d) in enumerate(zip(trial_conds, plan_durs)):
+            is_last = (i == n_trials - 1)
             trials.append({
                 'condition': cond,
                 'instruction_duration': instr_dur,
-                'planning_duration': round(plan_d, 6),
+                'planning_duration': round(plan_d, 4),
                 'movement_duration': mov_dur,
-                'rest_duration': final_rest if i == n_trials - 1 else rest_dur,
+                'rest_duration': round(
+                    final_rest_adj if is_last else rest_dur_adj, 4
+                ),
                 'task_type': 2,
             })
+
         return trials
 
     # ═════════════════════════════════════════════════════════════════

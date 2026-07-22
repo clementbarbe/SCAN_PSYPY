@@ -401,7 +401,8 @@ _BUILTIN_DEFAULTS: dict[str, dict] = {
             } for i in [1, 2, 3]},
             **{i+3: {
                 'name': f'Task 2 Run {i}', 'task_type': 2, 'run_number': i,
-                'total_duration': 630.0, 'pre_start_wait': 5.0,
+                'total_duration': 635.0,  # 630s content + 5s pre-wait
+                'pre_start_wait': 5.0,
                 'n_trials': 32, 'instruction_duration_fixed': 1.5,
                 'planning_duration_mean': 4.0, 'planning_jitter': 0.5,
                 'movement_duration': 8.0, 'rest_duration': 6.0,
