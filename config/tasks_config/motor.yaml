@@ -11,22 +11,22 @@ stimulus:
   blink_freq: 1.25
 
 images:
-  right_hand: "stimuli/images/rh.jpg"
-  left_hand:  "stimuli/images/lh.jpg"
-  right_foot: "stimuli/images/rf.jpg"
+  main_droite: "stimuli/images/rh.jpg"
+  main_gauche: "stimuli/images/lh.jpg"
+  pied_droit:  "stimuli/images/rf.jpg"
 
 conditions_task1:
-  - { name: "Right Hand", images: ["right_hand"] }
-  - { name: "Left Hand",  images: ["left_hand"] }
-  - { name: "Right Foot", images: ["right_foot"] }
+  - { name: "Main Droite",  images: ["main_droite"] }
+  - { name: "Main Gauche",  images: ["main_gauche"] }
+  - { name: "Pied Droit",   images: ["pied_droit"] }
 
 conditions_task2:
-  - { name: "Right Hand",              images: ["right_hand"] }
-  - { name: "Left Hand",               images: ["left_hand"] }
-  - { name: "Right Foot",              images: ["right_foot"] }
-  - { name: "Left Hand + Right Hand",  images: ["left_hand", "right_hand"] }
-  - { name: "Left Hand + Right Foot",  images: ["left_hand", "right_foot"] }
-  - { name: "Right Hand + Right Foot", images: ["right_hand", "right_foot"] }
+  - { name: "Main Droite",                images: ["main_droite"] }
+  - { name: "Main Gauche",                images: ["main_gauche"] }
+  - { name: "Pied Droit",                 images: ["pied_droit"] }
+  - { name: "Main Gauche + Main Droite",  images: ["main_gauche", "main_droite"] }
+  - { name: "Main Gauche + Pied Droit",   images: ["main_gauche", "pied_droit"] }
+  - { name: "Main Droite + Pied Droit",   images: ["main_droite", "pied_droit"] }
 
 ttl_codes:
   instruction_onset: 210
@@ -36,64 +36,26 @@ ttl_codes:
 designs:
 
   1:
-    name: "Task 1 Run 1"
+    name: "Isolated Task (36 essais, ~10min)"
     task_type: 1
     run_number: 1
-    total_duration: 202.0
+    total_duration: 602.0
     pre_start_wait: 5.0
-    n_trials: 12
-    reps_per_condition: 4
+    n_trials: 36
+    reps_per_condition: 12
     instruction_durations: [2.25, 2.50, 2.75]
     movement_duration: 8.0
     rest_duration: 6.0
     final_rest_duration: 12.0
-    inter_run_rest: 90.0
+    inter_run_rest: 0.0
     rest_duration_design: 0.0
     instruction_duration: 0.0
     pre_block_fixation: 0.0
     blocks:
-      - { n_trials: 12 }
+      - { n_trials: 36 }
 
   2:
-    name: "Task 1 Run 2"
-    task_type: 1
-    run_number: 2
-    total_duration: 202.0
-    pre_start_wait: 5.0
-    n_trials: 12
-    reps_per_condition: 4
-    instruction_durations: [2.25, 2.50, 2.75]
-    movement_duration: 8.0
-    rest_duration: 6.0
-    final_rest_duration: 12.0
-    inter_run_rest: 90.0
-    rest_duration_design: 0.0
-    instruction_duration: 0.0
-    pre_block_fixation: 0.0
-    blocks:
-      - { n_trials: 12 }
-
-  3:
-    name: "Task 1 Run 3"
-    task_type: 1
-    run_number: 3
-    total_duration: 202.0
-    pre_start_wait: 5.0
-    n_trials: 12
-    reps_per_condition: 4
-    instruction_durations: [2.25, 2.50, 2.75]
-    movement_duration: 8.0
-    rest_duration: 6.0
-    final_rest_duration: 12.0
-    inter_run_rest: 90.0
-    rest_duration_design: 0.0
-    instruction_duration: 0.0
-    pre_block_fixation: 0.0
-    blocks:
-      - { n_trials: 12 }
-
-  4:
-    name: "Task 2 Run 1"
+    name: "Combined Task Run 1 (~10min35)"
     task_type: 2
     run_number: 1
     total_duration: 635.0
@@ -112,8 +74,8 @@ designs:
     blocks:
       - { n_trials: 32 }
 
-  5:
-    name: "Task 2 Run 2"
+  3:
+    name: "Combined Task Run 2 (~10min35)"
     task_type: 2
     run_number: 2
     total_duration: 635.0
@@ -132,8 +94,8 @@ designs:
     blocks:
       - { n_trials: 32 }
 
-  6:
-    name: "Task 2 Run 3"
+  4:
+    name: "Combined Task Run 3 (~10min35)"
     task_type: 2
     run_number: 3
     total_duration: 635.0

@@ -1,14 +1,14 @@
 """
-Motor SCAN Task — two paradigms for fMRI.
+Motor SCAN Task — Isolated & Combined paradigms for fMRI.
 
-Task 1: 3 conditions (RH, LH, RF), 12 trials/run, 202s exact.
-Task 2: 6 conditions (3 simple + 3 combined), 32 trials/run, 630s exact.
+Isolated Task: 3 conditions (Main Droite, Main Gauche, Pied Droit),
+               36 trials, 1 run.
+Combined Task: 6 conditions (3 simple + 3 combined),
+               32 trials/run, 3 runs.
 
-All trial timings are precalculated as absolute deadlines before
-the task starts. This eliminates cumulative drift from frame-by-frame
-relative timing and improves precision at high refresh rates (120Hz).
-
-CSV logs every phase as a separate event row for GLM modeling.
+All timings precalculated as absolute deadlines.
+Instruction durations for Isolated Task: exactly 2.25, 2.50, or 2.75s.
+Planning durations for Combined Task: 4.0 ± 0.5s, mean forced to 4.0s.
 """
 
 from __future__ import annotations
@@ -31,10 +31,6 @@ class MotorTask(BaseTask):
     """Motor SCAN fMRI task with precalculated absolute timings."""
 
     TASK_NAME = 'motor'
-
-    # ═════════════════════════════════════════════════════════════════
-    # SETUP
-    # ═════════════════════════════════════════════════════════════════
 
     def _setup_stimuli(self) -> None:
         stim_cfg = self.task_config.get('stimulus', {})
@@ -60,7 +56,6 @@ class MotorTask(BaseTask):
         self._blink_freq = stim_cfg.get('blink_freq', 1.25)
         self._blink_period = 1.0 / self._blink_freq
 
-        # Images
         img_cfg = self.task_config.get('images', {})
         img_size = stim_cfg.get('image_size', [0.4, 0.4])
         img_y = stim_cfg.get('image_y', 0.15)
@@ -97,7 +92,7 @@ class MotorTask(BaseTask):
 
         if task_type == 1:
             return (
-                f"Tache Motrice 1 — Run {run_num}\n"
+                f"Mouvement Isole\n"
                 f"Duree : {dur_min}min{dur_sec:02d}s\n\n"
                 f"1 - Vous verrez une image indiquant\n"
                 f"    quel membre bouger\n\n"
@@ -114,7 +109,7 @@ class MotorTask(BaseTask):
             )
         else:
             return (
-                f"Tache Motrice 2 — Run {run_num}\n"
+                f"Mouvement Combine — Run {run_num}\n"
                 f"Duree : {dur_min}min{dur_sec:02d}s\n\n"
                 f"1 - Vous verrez une ou deux images\n"
                 f"    indiquant quel(s) membre(s) bouger\n\n"
@@ -134,17 +129,10 @@ class MotorTask(BaseTask):
         return None
 
     # ═════════════════════════════════════════════════════════════════
-    # PRECALCULATE ALL TIMINGS
+    # PRECALCULATE
     # ═════════════════════════════════════════════════════════════════
 
     def _precalculate_schedule(self) -> list[dict]:
-        """
-        Precalculate absolute onset times for every phase of every trial.
-
-        Returns list of dicts with absolute deadlines, computed ONCE
-        before the task loop starts. During execution, each phase simply
-        runs until clock.time >= deadline — no cumulative drift.
-        """
         task_type = self.design.get('task_type', 1)
 
         if task_type == 1:
@@ -153,38 +141,32 @@ class MotorTask(BaseTask):
             trials = self._build_task2_trials()
 
         pre_wait = self.design.get('pre_start_wait', 5.0)
-        total_target = self.design.get('total_duration', 202.0)
+        total_target = self.design.get('total_duration', 602.0)
 
-        # Calculate absolute onsets from t=0
-        t = pre_wait  # first trial starts after pre_wait
-
+        t = pre_wait
         schedule = []
-        for i, trial in enumerate(trials):
-            entry = dict(trial)  # copy
 
-            # Instruction phase
+        for i, trial in enumerate(trials):
+            entry = dict(trial)
+
             entry['abs_instr_onset'] = round(t, 6)
             t += entry['instruction_duration']
 
-            # Planning phase (task 2 only)
             if entry.get('planning_duration', 0) > 0:
                 entry['abs_plan_onset'] = round(t, 6)
                 t += entry['planning_duration']
             else:
                 entry['abs_plan_onset'] = -1.0
 
-            # Movement phase
             entry['abs_mov_onset'] = round(t, 6)
             t += entry['movement_duration']
 
-            # Rest phase
             entry['abs_rest_onset'] = round(t, 6)
             t += entry['rest_duration']
 
             entry['abs_trial_end'] = round(t, 6)
             schedule.append(entry)
 
-        # Verify total
         actual_total = schedule[-1]['abs_trial_end']
         drift = actual_total - total_target
         if abs(drift) > 0.01:
@@ -194,32 +176,23 @@ class MotorTask(BaseTask):
             )
 
         self.logger.log(
-            f"Schedule precalculated: {len(schedule)} trials, "
+            f"Schedule: {len(schedule)} trials, "
             f"total={actual_total:.3f}s (target={total_target:.1f}s)"
         )
-
         return schedule
 
     def _build_task1_trials(self) -> list[dict]:
-        """
-        Task 1: instruction durations are EXACTLY 2.25, 2.50, or 2.75s.
-        
-        The total_duration in the config is the FULL run including pre_wait.
-        We verify the total matches but NEVER adjust instruction durations.
-        If there's a mismatch, we adjust rest durations minimally.
-        """
-        n_trials = self.design.get('n_trials', 12)
-        reps = self.design.get('reps_per_condition', 4)
-        instr_durs_pool = self.design.get(
+        n_trials = self.design.get('n_trials', 36)
+        reps = self.design.get('reps_per_condition', 12)
+        instr_pool = self.design.get(
             'instruction_durations', [2.25, 2.50, 2.75]
         )
         mov_dur = self.design.get('movement_duration', 8.0)
         rest_dur = self.design.get('rest_duration', 6.0)
         final_rest = self.design.get('final_rest_duration', 12.0)
-        total_target = self.design.get('total_duration', 202.0)
+        total_target = self.design.get('total_duration', 602.0)
         pre_wait = self.design.get('pre_start_wait', 5.0)
 
-        # Build condition list
         conditions = self._conditions_t1
         trial_conds = []
         for cond in conditions:
@@ -227,64 +200,46 @@ class MotorTask(BaseTask):
                 trial_conds.append(cond)
 
         trial_conds = desequence(
-            trial_conds, key_func=lambda t: t['name'], max_consecutive=1,
+            trial_conds, key_func=lambda t: t['name'], max_consecutive=2,
         )
 
-        # Assign EXACT instruction durations (balanced across pool)
-        # 12 trials, 3 durations -> 4 of each
+        # EXACT instruction durations, balanced
+        per_dur = n_trials // len(instr_pool)
+        remainder = n_trials % len(instr_pool)
         assignments = []
-        per_dur = n_trials // len(instr_durs_pool)
-        remainder = n_trials % len(instr_durs_pool)
-        for i, d in enumerate(instr_durs_pool):
+        for i, d in enumerate(instr_pool):
             count = per_dur + (1 if i < remainder else 0)
             assignments.extend([d] * count)
         random.shuffle(assignments)
 
-        # Verify total and adjust REST (not instructions) if needed
+        # Adjust REST to hit total (never touch instructions)
         task_content = sum(assignments) + n_trials * mov_dur
         rest_content = (n_trials - 1) * rest_dur + final_rest
-        computed_total = pre_wait + task_content + rest_content
+        computed = pre_wait + task_content + rest_content
 
-        diff = total_target - computed_total
-        if abs(diff) > 0.001:
-            # Distribute difference across all rest periods
-            n_rests = n_trials  # (n-1) normal + 1 final
-            adj = diff / n_rests
-            rest_dur_adj = rest_dur + adj
-            final_rest_adj = final_rest + adj
-            self.logger.log(
-                f"Task1 rest adjusted by {adj*1000:+.1f}ms/rest "
-                f"to hit {total_target:.1f}s"
-            )
-        else:
-            rest_dur_adj = rest_dur
-            final_rest_adj = final_rest
+        diff = total_target - computed
+        n_rests = n_trials
+        adj = diff / n_rests if abs(diff) > 0.001 else 0
+        rest_adj = rest_dur + adj
+        final_adj = final_rest + adj
+
+        if abs(adj) > 0.001:
+            self.logger.log(f"Isolated: rest adj {adj*1000:+.1f}ms/rest")
 
         trials = []
         for i, (cond, instr_d) in enumerate(zip(trial_conds, assignments)):
             is_last = (i == n_trials - 1)
             trials.append({
                 'condition': cond,
-                'instruction_duration': instr_d,  # EXACT, never modified
+                'instruction_duration': instr_d,
                 'planning_duration': 0.0,
                 'movement_duration': mov_dur,
-                'rest_duration': final_rest_adj if is_last else rest_dur_adj,
+                'rest_duration': round(final_adj if is_last else rest_adj, 4),
                 'task_type': 1,
             })
-
         return trials
 
     def _build_task2_trials(self) -> list[dict]:
-        """
-        Task 2: planning = 4.0 ± 0.5s, mean MUST be 4.0s.
-        
-        total_duration is the FULL run including pre_wait (635s).
-        
-        Strategy:
-            1. Generate balanced jitters around 4.0s
-            2. Force the mean to exactly 4.0s
-            3. Adjust rest durations for any remaining difference
-        """
         n_trials = self.design.get('n_trials', 32)
         instr_dur = self.design.get('instruction_duration_fixed', 1.5)
         plan_mean = self.design.get('planning_duration_mean', 4.0)
@@ -310,46 +265,31 @@ class MotorTask(BaseTask):
             trial_conds, key_func=lambda t: t['name'], max_consecutive=1,
         )
 
-        # Generate planning durations: balanced, mean forced to plan_mean
+        # Planning: mean forced to exactly plan_mean
         plan_durs = [
-            random.uniform(plan_mean - plan_jitter,
-                           plan_mean + plan_jitter)
+            random.uniform(plan_mean - plan_jitter, plan_mean + plan_jitter)
             for _ in range(n_trials)
         ]
-        
-        # Force mean to exactly plan_mean
-        current_mean = sum(plan_durs) / len(plan_durs)
-        correction = plan_mean - current_mean
-        plan_durs = [round(d + correction, 6) for d in plan_durs]
-
-        # Clamp to valid range (shouldn't be needed but safety)
+        correction = plan_mean - sum(plan_durs) / len(plan_durs)
         plan_durs = [
-            max(plan_mean - plan_jitter, min(plan_mean + plan_jitter, d))
+            max(plan_mean - plan_jitter,
+                min(plan_mean + plan_jitter, d + correction))
             for d in plan_durs
         ]
 
-        # Verify and adjust REST for exact total
-        task_content = (
-            n_trials * instr_dur
-            + sum(plan_durs)
-            + n_trials * mov_dur
-        )
+        # Adjust REST for exact total
+        task_content = n_trials * instr_dur + sum(plan_durs) + n_trials * mov_dur
         rest_content = (n_trials - 1) * rest_dur + final_rest
-        computed_total = pre_wait + task_content + rest_content
+        computed = pre_wait + task_content + rest_content
 
-        diff = total_target - computed_total
-        if abs(diff) > 0.001:
-            n_rests = n_trials
-            adj = diff / n_rests
-            rest_dur_adj = rest_dur + adj
-            final_rest_adj = final_rest + adj
-            self.logger.log(
-                f"Task2 rest adjusted by {adj*1000:+.1f}ms/rest "
-                f"to hit {total_target:.1f}s"
-            )
-        else:
-            rest_dur_adj = rest_dur
-            final_rest_adj = final_rest
+        diff = total_target - computed
+        n_rests = n_trials
+        adj = diff / n_rests if abs(diff) > 0.001 else 0
+        rest_adj = rest_dur + adj
+        final_adj = final_rest + adj
+
+        if abs(adj) > 0.001:
+            self.logger.log(f"Combined: rest adj {adj*1000:+.1f}ms/rest")
 
         trials = []
         for i, (cond, plan_d) in enumerate(zip(trial_conds, plan_durs)):
@@ -359,16 +299,13 @@ class MotorTask(BaseTask):
                 'instruction_duration': instr_dur,
                 'planning_duration': round(plan_d, 4),
                 'movement_duration': mov_dur,
-                'rest_duration': round(
-                    final_rest_adj if is_last else rest_dur_adj, 4
-                ),
+                'rest_duration': round(final_adj if is_last else rest_adj, 4),
                 'task_type': 2,
             })
-
         return trials
 
     # ═════════════════════════════════════════════════════════════════
-    # MAIN RUN — precalculate then execute
+    # MAIN RUN
     # ═════════════════════════════════════════════════════════════════
 
     def run(self) -> Path | None:
@@ -376,28 +313,22 @@ class MotorTask(BaseTask):
         try:
             self.show_text_and_wait(self._get_instruction_text())
 
-            # ── Precalculate everything BEFORE trigger ───────────────
-            self.logger.log("Precalculating trial schedule...")
+            self.logger.log("Precalculating schedule...")
             schedule = self._precalculate_schedule()
             self.logger.ok(f"Schedule ready: {len(schedule)} trials")
 
-            # ── Trigger ──────────────────────────────────────────────
             self.wait_for_trigger()
 
-            # ── Pre-start wait ───────────────────────────────────────
             pre_wait = self.design.get('pre_start_wait', 5.0)
             if pre_wait > 0:
                 self._run_until(pre_wait, 'fixation')
 
-            # ── Execute precalculated schedule ───────────────────────
             task_type = self.design.get('task_type', 1)
             run_num = self.design.get('run_number', 1)
             block_def = self.block_sequence[0] if self.block_sequence else {'n_trials': 0}
+            task_label = "Isolated" if task_type == 1 else "Combined"
 
-            self.logger.log(
-                f"Motor Task {task_type} Run {run_num}: "
-                f"{len(schedule)} trials"
-            )
+            self.logger.log(f"{task_label} Run {run_num}: {len(schedule)} trials")
 
             for trial_idx, entry in enumerate(schedule):
                 records = self._execute_trial(entry, trial_idx, block_def)
@@ -410,7 +341,7 @@ class MotorTask(BaseTask):
             total_t = self.clock.time
             target = self.design.get('total_duration', 0)
             self.logger.ok(
-                f"Motor Task {task_type} Run {run_num} done. "
+                f"{task_label} Run {run_num} done. "
                 f"Actual: {total_t:.3f}s (target: {target:.1f}s, "
                 f"diff: {total_t - target:+.3f}s)"
             )
@@ -425,23 +356,18 @@ class MotorTask(BaseTask):
                 self.logger.err(f"CRITICAL: {e}")
                 import traceback
                 traceback.print_exc()
-
         finally:
             saved_path = self._finish()
 
         return saved_path
 
     # ═════════════════════════════════════════════════════════════════
-    # TRIAL EXECUTION — absolute deadlines
+    # TRIAL EXECUTION
     # ═════════════════════════════════════════════════════════════════
 
     def _execute_trial(self, entry: dict, trial_idx: int,
                        block_def: dict) -> list[dict]:
-        """
-        Execute one trial using precalculated absolute deadlines.
 
-        Returns a list of CSV records (one per phase for GLM).
-        """
         cond = entry['condition']
         cond_name = cond['name']
         cond_images = cond['images']
@@ -479,7 +405,7 @@ class MotorTask(BaseTask):
                 'wall_timestamp': datetime.now().strftime('%H:%M:%S.%f'),
             }
 
-        # ── Phase: Instruction ───────────────────────────────────────
+        # Instruction
         ttl = self._ttl.get('instruction_onset', 0)
         if ttl:
             self.hardware.send_trigger(ttl)
@@ -488,10 +414,11 @@ class MotorTask(BaseTask):
         )
 
         actual_instr = self.clock.time
-        self._show_instruction_until(cond_name, cond_images, abs_mov if abs_plan < 0 else abs_plan)
+        next_deadline = abs_plan if abs_plan >= 0 else abs_mov
+        self._show_instruction_until(cond_name, cond_images, next_deadline)
 
-        rec_instr = make_base()
-        rec_instr.update({
+        rec = make_base()
+        rec.update({
             'event_type': 'instruction',
             'event_onset': round(actual_instr, 4),
             'event_duration': round(instr_dur, 4),
@@ -499,9 +426,9 @@ class MotorTask(BaseTask):
             'stim_onset': round(actual_instr, 4),
             'task_time': round(self.clock.time, 4),
         })
-        records.append(rec_instr)
+        records.append(rec)
 
-        # ── Phase: Planning (task 2 only) ────────────────────────────
+        # Planning (combined only)
         if task_type == 2 and plan_dur > 0:
             self.hardware.send_eyetracker_message(
                 f"PLAN_{cond_name}_T{trial_idx}_t{abs_plan:.3f}"
@@ -509,8 +436,8 @@ class MotorTask(BaseTask):
             actual_plan = self.clock.time
             self._run_until(abs_mov, 'white_cross')
 
-            rec_plan = make_base()
-            rec_plan.update({
+            rec = make_base()
+            rec.update({
                 'event_type': 'planning',
                 'event_onset': round(actual_plan, 4),
                 'event_duration': round(plan_dur, 4),
@@ -518,9 +445,9 @@ class MotorTask(BaseTask):
                 'stim_onset': round(actual_plan, 4),
                 'task_time': round(self.clock.time, 4),
             })
-            records.append(rec_plan)
+            records.append(rec)
 
-        # ── Phase: Movement ──────────────────────────────────────────
+        # Movement
         ttl = self._ttl.get('movement_onset', 0)
         if ttl:
             self.hardware.send_trigger(ttl)
@@ -531,8 +458,8 @@ class MotorTask(BaseTask):
         actual_mov = self.clock.time
         self._run_until(abs_rest, 'blink')
 
-        rec_mov = make_base()
-        rec_mov.update({
+        rec = make_base()
+        rec.update({
             'event_type': 'movement',
             'event_onset': round(actual_mov, 4),
             'event_duration': round(mov_dur, 4),
@@ -540,9 +467,9 @@ class MotorTask(BaseTask):
             'stim_onset': round(actual_mov, 4),
             'task_time': round(self.clock.time, 4),
         })
-        records.append(rec_mov)
+        records.append(rec)
 
-        # ── Phase: Rest ──────────────────────────────────────────────
+        # Rest
         ttl = self._ttl.get('rest_onset', 0)
         if ttl:
             self.hardware.send_trigger(ttl)
@@ -550,8 +477,8 @@ class MotorTask(BaseTask):
         actual_rest = self.clock.time
         self._run_until(abs_end, 'black')
 
-        rec_rest = make_base()
-        rec_rest.update({
+        rec = make_base()
+        rec.update({
             'event_type': 'rest',
             'event_onset': round(actual_rest, 4),
             'event_duration': round(rest_dur, 4),
@@ -559,7 +486,7 @@ class MotorTask(BaseTask):
             'stim_onset': round(actual_rest, 4),
             'task_time': round(self.clock.time, 4),
         })
-        records.append(rec_rest)
+        records.append(rec)
 
         # Console
         if task_type == 2:
@@ -578,14 +505,10 @@ class MotorTask(BaseTask):
         return records
 
     # ═════════════════════════════════════════════════════════════════
-    # DISPLAY — absolute deadline versions
+    # DISPLAY
     # ═════════════════════════════════════════════════════════════════
 
     def _run_until(self, abs_deadline: float, mode: str) -> None:
-        """
-        Run display loop until absolute clock time.
-        mode: 'fixation', 'white_cross', 'blink', 'black'
-        """
         blink_start = self.clock.time
 
         while self.clock.time < abs_deadline:
@@ -598,19 +521,16 @@ class MotorTask(BaseTask):
                 phase = elapsed % self._blink_period
                 if phase < self._blink_period / 2.0:
                     self._green_cross.draw()
-                # else: nothing drawn (blank)
             elif mode == 'black':
-                pass  # blank screen
+                pass
 
             self.win.flip()
             self.get_keys(key_list=[])
 
     def _show_instruction_until(self, name: str, image_keys: list[str],
                                 abs_deadline: float) -> None:
-        """Show instruction images + text until absolute deadline."""
-        # Precompute image positions
-        left_keys = {'left_hand'}
-        right_keys = {'right_hand', 'right_foot'}
+        left_keys = {'main_gauche'}
+        right_keys = {'main_droite', 'pied_droit'}
 
         img_positions = []
         if len(image_keys) == 1:
@@ -624,7 +544,10 @@ class MotorTask(BaseTask):
                 if key in left_keys:
                     img_left = self._images.get(key)
                 elif key in right_keys:
-                    img_right = self._images.get(key)
+                    if img_right is None:
+                        img_right = self._images.get(key)
+                    else:
+                        img_left = self._images.get(key)
             if img_left is None and img_right is None:
                 img_left = self._images.get(image_keys[0])
                 img_right = self._images.get(image_keys[1])
@@ -653,15 +576,11 @@ class MotorTask(BaseTask):
             self.win.flip()
             self.get_keys(key_list=[])
 
-    # ═════════════════════════════════════════════════════════════════
-    # GENERATE TRIALS (required by BaseTask but we use precalculate)
-    # ═════════════════════════════════════════════════════════════════
-
     def generate_trials(self, block_def):
-        return []  # Not used — _precalculate_schedule handles everything
+        return []
 
     def run_trial(self, trial_data, block_idx, trial_idx, block_def, **kw):
-        return {}  # Not used — _execute_trial handles everything
+        return {}
 
     # ═════════════════════════════════════════════════════════════════
     # STATS
@@ -674,12 +593,11 @@ class MotorTask(BaseTask):
 
         task_type = records[0].get('task_type', 1)
         run_num = records[0].get('run_number', 1)
+        task_label = "ISOLATED" if task_type == 1 else "COMBINED"
 
-        # Only count trial-level (instruction events)
         instr_recs = [r for r in records if r.get('event_type') == 'instruction']
         total_trials = len(instr_recs)
 
-        # Actual end time
         rest_recs = [r for r in records if r.get('event_type') == 'rest']
         if rest_recs:
             last = rest_recs[-1]
@@ -690,10 +608,7 @@ class MotorTask(BaseTask):
         target_dur = self.design.get('total_duration', 0)
 
         print(f"\n{'=' * 60}")
-        print(
-            f"  MOTOR TASK {task_type} RUN {run_num} — "
-            f"{total_trials} essais"
-        )
+        print(f"  {task_label} RUN {run_num} — {total_trials} essais")
         print(
             f"  Duree : {actual_dur:.1f}s "
             f"(cible: {target_dur:.1f}s, "
@@ -701,51 +616,41 @@ class MotorTask(BaseTask):
         )
         print(f"  {'-' * 54}")
 
-        # Condition counts
         cond_counts = Counter(r['condition'] for r in instr_recs)
         for cond, count in sorted(cond_counts.items()):
             print(f"  {cond:>28s}: {count} essais")
 
-        # Timing accuracy
         print(f"  {'-' * 54}")
 
-        # Instruction jitters (task 1)
         if task_type == 1:
             durs = [r['event_duration'] for r in instr_recs]
             print(
-                f"  Jitter instructions: "
+                f"  Instructions: "
                 f"min={min(durs):.3f}s max={max(durs):.3f}s "
                 f"mean={sum(durs)/len(durs):.3f}s"
             )
 
-        # Planning jitters (task 2)
         plan_recs = [r for r in records if r.get('event_type') == 'planning']
         if plan_recs:
             durs = [r['event_duration'] for r in plan_recs]
             print(
-                f"  Jitter planning: "
+                f"  Planning: "
                 f"min={min(durs):.3f}s max={max(durs):.3f}s "
                 f"mean={sum(durs)/len(durs):.3f}s"
             )
 
-        # Scheduling accuracy
-        all_events = [r for r in records if 'scheduled_onset' in r]
+        all_events = [r for r in records if r.get('scheduled_onset', -1) >= 0]
         if all_events:
-            drifts = [
-                abs(r['event_onset'] - r['scheduled_onset'])
-                for r in all_events
-                if r['scheduled_onset'] >= 0
-            ]
+            drifts = [abs(r['event_onset'] - r['scheduled_onset']) for r in all_events]
             if drifts:
                 print(
-                    f"  Precision: max_drift={max(drifts)*1000:.1f}ms "
-                    f"mean_drift={sum(drifts)/len(drifts)*1000:.1f}ms"
+                    f"  Precision: max={max(drifts)*1000:.1f}ms "
+                    f"mean={sum(drifts)/len(drifts)*1000:.1f}ms"
                 )
 
-        # Event count per type
         print(f"  {'-' * 54}")
         type_counts = Counter(r.get('event_type', '?') for r in records)
         parts = [f"{t}={c}" for t, c in sorted(type_counts.items())]
-        print(f"  CSV events: {', '.join(parts)} ({len(records)} total)")
+        print(f"  CSV: {', '.join(parts)} ({len(records)} rows)")
 
         print(f"{'=' * 60}\n")

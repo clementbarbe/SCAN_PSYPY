@@ -310,11 +310,10 @@ import time as _time
 class MotorPanel(QWidget):
     TASK = 'motor'
 
-    # Class-level state — survives menu close/reopen
     _chrono_running = False
     _chrono_target = 0
     _chrono_start_epoch = 0.0
-    _pending_chrono = None  # set by _run before menu closes
+    _pending_chrono = None
 
     def __init__(self, menu):
         super().__init__()
@@ -326,38 +325,35 @@ class MotorPanel(QWidget):
 
         self._build()
 
-        # Auto-start chrono if a run just finished
         if MotorPanel._pending_chrono is not None:
             target = MotorPanel._pending_chrono
             MotorPanel._pending_chrono = None
             self._start_chrono(target)
         elif MotorPanel._chrono_running:
-            # Resume ongoing chrono
             self._timer.start()
 
     def _build(self):
         lo = QVBoxLayout(self)
         lo.setSpacing(10)
 
-        # ── Task 1 ───────────────────────────────────────────────────
-        t1 = QGroupBox("Tache 1 — RH / LH / RF (12 essais, 3min22)")
-        t1l = QGridLayout(t1)
-        t1l.setSpacing(6)
-        for i in range(3):
-            btn = QPushButton(f"Run {i+1}")
-            btn.setObjectName("run")
-            btn.clicked.connect(lambda _, r=i+1: self._run_t1(r))
-            t1l.addWidget(btn, 0, i)
+        # ── Isolated Task ────────────────────────────────────────────
+        t1 = QGroupBox("Isolated Task — Main D / Main G / Pied D (36 essais, ~10min)")
+        t1l = QHBoxLayout(t1)
+        btn = QPushButton("Lancer")
+        btn.setObjectName("run")
+        btn.clicked.connect(self._run_isolated)
+        t1l.addWidget(btn)
+        t1l.addStretch()
         lo.addWidget(t1)
 
-        # ── Task 2 ───────────────────────────────────────────────────
-        t2 = QGroupBox("Tache 2 — 6 conditions (32 essais, 10min30)")
+        # ── Combined Task ────────────────────────────────────────────
+        t2 = QGroupBox("Combined Task — 6 conditions (32 essais/run, ~10min35)")
         t2l = QGridLayout(t2)
         t2l.setSpacing(6)
         for i in range(3):
             btn = QPushButton(f"Run {i+1}")
             btn.setObjectName("run")
-            btn.clicked.connect(lambda _, r=i+1: self._run_t2(r))
+            btn.clicked.connect(lambda _, r=i+1: self._run_combined(r))
             t2l.addWidget(btn, 0, i)
         lo.addWidget(t2)
 
@@ -408,55 +404,34 @@ class MotorPanel(QWidget):
         lo.addWidget(chrono)
         lo.addStretch()
 
-    # ── Run tasks ────────────────────────────────────────────────────
-
-    def _run_t1(self, run_num):
-        """
-        Launch Task 1 run.
-        Runs 1 and 2: auto-start 1min30 chrono on menu reopen.
-        Run 3: no chrono (last run).
-        """
-        # Set pending chrono BEFORE menu closes
-        if run_num < 3:
-            MotorPanel._pending_chrono = 90   # 1min30
-        else:
-            MotorPanel._pending_chrono = None
-
+    def _run_isolated(self):
+        MotorPanel._pending_chrono = None  # single run, no chrono after
         self.menu.run_experiment({
             'task_name': self.TASK,
-            'design_id': run_num,  # designs 1, 2, 3
+            'design_id': 1,
         })
 
-    def _run_t2(self, run_num):
-        """
-        Launch Task 2 run.
-        Runs 1 and 2: auto-start 2min chrono on menu reopen.
-        Run 3: no chrono (last run).
-        """
+    def _run_combined(self, run_num):
         if run_num < 3:
-            MotorPanel._pending_chrono = 120  # 2min
+            MotorPanel._pending_chrono = 120  # 2min between runs
         else:
             MotorPanel._pending_chrono = None
-
         self.menu.run_experiment({
             'task_name': self.TASK,
-            'design_id': run_num + 3,  # designs 4, 5, 6
+            'design_id': run_num + 1,  # designs 2, 3, 4
         })
 
-    # ── Chrono ───────────────────────────────────────────────────────
-
-    def _start_chrono(self, target_seconds: int):
+    def _start_chrono(self, target_seconds):
         MotorPanel._chrono_running = True
         MotorPanel._chrono_target = target_seconds
         MotorPanel._chrono_start_epoch = _time.time()
 
         self._chrono_display.setStyleSheet(
             "font-size: 36px; font-weight: bold; "
-            "font-family: monospace; padding: 10px; "
-            "color: #e0e0e0;"
+            "font-family: monospace; padding: 10px; color: #e0e0e0;"
         )
-        target_str = f"{target_seconds // 60}min{target_seconds % 60:02d}s"
-        self._chrono_status.setText(f"Repos en cours — cible: {target_str}")
+        t_str = f"{target_seconds // 60}min{target_seconds % 60:02d}s"
+        self._chrono_status.setText(f"Repos en cours — cible: {t_str}")
         self._chrono_status.setStyleSheet(
             "font-size: 12px; color: #e08000; padding: 2px;"
         )
@@ -469,8 +444,7 @@ class MotorPanel(QWidget):
         self._chrono_display.setText("--:--.-")
         self._chrono_display.setStyleSheet(
             "font-size: 36px; font-weight: bold; "
-            "font-family: monospace; padding: 10px; "
-            "color: #808080;"
+            "font-family: monospace; padding: 10px; color: #808080;"
         )
         self._chrono_status.setText("")
 
@@ -493,21 +467,14 @@ class MotorPanel(QWidget):
         if remaining <= 0:
             self._chrono_display.setStyleSheet(
                 "font-size: 36px; font-weight: bold; "
-                "font-family: monospace; padding: 10px; "
-                "color: #00c000;"
+                "font-family: monospace; padding: 10px; color: #00c000;"
             )
-            over = elapsed_s - target
-            over_s = int(over)
-            self._chrono_status.setText(
-                f"PRET — repos termine depuis {over_s}s"
-            )
+            over = int(elapsed_s - target)
+            self._chrono_status.setText(f"PRET — termine depuis {over}s")
             self._chrono_status.setStyleSheet(
-                "font-size: 12px; color: #00c000; padding: 2px; "
-                "font-weight: bold;"
+                "font-size: 12px; color: #00c000; padding: 2px; font-weight: bold;"
             )
         else:
-            r_mins = int(remaining) // 60
-            r_secs = int(remaining) % 60
-            self._chrono_status.setText(
-                f"Reste: {r_mins:02d}:{r_secs:02d}"
-            )
+            r_min = int(remaining) // 60
+            r_sec = int(remaining) % 60
+            self._chrono_status.setText(f"Reste: {r_min:02d}:{r_sec:02d}")
