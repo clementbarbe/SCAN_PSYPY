@@ -240,6 +240,18 @@ class MotorTask(BaseTask):
         return trials
 
     def _build_task2_trials(self) -> list[dict]:
+        """
+        Task 2: planning = 4.0 ± 0.5s, mean forced to 4.0s.
+
+        Balance across 3 runs:
+            96 total trials / 6 conditions = 16 each.
+            32 per run / 6 = 5 base + 2 extras.
+            Each run gives the 2 extras to a different pair of conditions:
+                Run 1: extras to conditions 0, 1
+                Run 2: extras to conditions 2, 3
+                Run 3: extras to conditions 4, 5
+            → Each condition gets exactly 6+5+5 = 16 across all 3 runs.
+        """
         n_trials = self.design.get('n_trials', 32)
         instr_dur = self.design.get('instruction_duration_fixed', 1.5)
         plan_mean = self.design.get('planning_duration_mean', 4.0)
@@ -249,23 +261,50 @@ class MotorTask(BaseTask):
         final_rest = self.design.get('final_rest_duration', 12.0)
         total_target = self.design.get('total_duration', 635.0)
         pre_wait = self.design.get('pre_start_wait', 5.0)
+        run_number = self.design.get('run_number', 1)
 
         conditions = self._conditions_t2
-        n_conds = len(conditions)
+        n_conds = len(conditions)  # 6
 
-        base_count = n_trials // n_conds
-        remainder = n_trials % n_conds
+        # ── Balanced distribution across 3 runs ──────────────────────
+        # 32 / 6 = 5 remainder 2
+        # Each run has 2 conditions with 6 trials, 4 with 5 trials.
+        # We rotate which pair gets the extra based on run_number.
+        #   Run 1 → conditions 0,1 get 6
+        #   Run 2 → conditions 2,3 get 6
+        #   Run 3 → conditions 4,5 get 6
+        # Result: each condition = 6+5+5 = 16 across 3 runs
+
+        base_count = n_trials // n_conds      # 5
+        remainder = n_trials % n_conds        # 2
+
+        # Which conditions get the bonus this run
+        # run_number is 1-indexed
+        bonus_start = ((run_number - 1) * remainder) % n_conds
+        bonus_indices = set()
+        for j in range(remainder):
+            bonus_indices.add((bonus_start + j) % n_conds)
+
         trial_conds = []
         for i, cond in enumerate(conditions):
-            count = base_count + (1 if i < remainder else 0)
+            count = base_count + (1 if i in bonus_indices else 0)
             for _ in range(count):
                 trial_conds.append(cond)
+
+        # Log the distribution
+        dist = {}
+        for cond in trial_conds:
+            dist[cond['name']] = dist.get(cond['name'], 0) + 1
+        self.logger.log(
+            f"Combined Run {run_number} distribution: "
+            + ", ".join(f"{k}={v}" for k, v in sorted(dist.items()))
+        )
 
         trial_conds = desequence(
             trial_conds, key_func=lambda t: t['name'], max_consecutive=1,
         )
 
-        # Planning: mean forced to exactly plan_mean
+        # ── Planning durations: mean forced to exactly plan_mean ─────
         plan_durs = [
             random.uniform(plan_mean - plan_jitter, plan_mean + plan_jitter)
             for _ in range(n_trials)
@@ -277,7 +316,7 @@ class MotorTask(BaseTask):
             for d in plan_durs
         ]
 
-        # Adjust REST for exact total
+        # ── Adjust REST for exact total ──────────────────────────────
         task_content = n_trials * instr_dur + sum(plan_durs) + n_trials * mov_dur
         rest_content = (n_trials - 1) * rest_dur + final_rest
         computed = pre_wait + task_content + rest_content
@@ -302,6 +341,7 @@ class MotorTask(BaseTask):
                 'rest_duration': round(final_adj if is_last else rest_adj, 4),
                 'task_type': 2,
             })
+
         return trials
 
     # ═════════════════════════════════════════════════════════════════
