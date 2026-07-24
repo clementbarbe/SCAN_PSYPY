@@ -209,19 +209,24 @@ class BaseTask(ABC):
             self.get_keys(key_list=[])
 
     def show_text_and_wait(self, text: str) -> None:
+        """Show instruction text and wait for 's' key to continue."""
         self._instruction_stim.text = text
         self._instruction_stim.draw()
         self.win.flip()
+
         while True:
             self._instruction_stim.draw()
             self.win.flip()
-            keys = self._keyboard.getKeys(waitRelease=False)
+            keys = self._keyboard.getKeys(
+                keyList=['s', self._quit_key], waitRelease=False,
+            )
             if keys:
                 for k in keys:
                     if k.name == self._quit_key:
                         raise AbortExperiment("Escape during instructions")
-                break
-        self.flush_keyboard()
+                    if k.name == 's':
+                        self.flush_keyboard()
+                        return
 
     def show_timed_text(self, text: str, duration: float,
                         stim=None) -> None:
