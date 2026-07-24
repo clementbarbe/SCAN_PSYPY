@@ -94,6 +94,10 @@ class Experiment:
         if not task_config:
             raise ConfigError(f"No config for task '{task_name}'.")
 
+        # ── Auto-increment run number to avoid overwriting ───────────
+        from dataio.subject_handler import next_run_number
+        self.settings.run = next_run_number(self.settings, task_name)
+
         data_writer = DataWriter(
             output_dir=self.settings.task_dir(task_name),
             filename=self.settings.output_filename(task_name, 'events'),
@@ -109,7 +113,10 @@ class Experiment:
             **kwargs,
         )
 
-        self.logger.ok(f"Running: {task_name} design {design_id}")
+        self.logger.ok(
+            f"Running: {task_name} design {design_id} "
+            f"(run {self.settings.run})"
+        )
         return task.run()
 
     def cleanup(self) -> None:

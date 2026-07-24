@@ -1,7 +1,3 @@
-"""
-Experiment settings — single dataclass for the session.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -11,14 +7,14 @@ from config.constants import DATA_DIR
 
 @dataclass
 class ExperimentSettings:
-    """Immutable session-level configuration."""
+    """Session-level configuration."""
 
     participant_id: str
     session: str = '01'
     run: str = '01'
 
     scanner_name: str = 'pc'
-    mode: str = 'pc'              # 'fmri' or 'pc'
+    mode: str = 'pc'
     fullscreen: bool = True
     screen_index: int = 0
 
