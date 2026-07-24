@@ -96,16 +96,12 @@ class MotorTask(BaseTask):
                 f"Duree : {dur_min}min{dur_sec:02d}s\n\n"
                 f"1 - Vous verrez une image indiquant\n"
                 f"    quel membre bouger\n\n"
-                f"2 - Une croix blanche apparait :\n"
-                f"    pensez au mouvement a effectuer\n"
-                f"    (flexion-extension),\n"
-                f"    mais NE BOUGEZ PAS encore\n\n"
-                f"3 - Croix verte qui clignote :\n"
+                f"2 - Croix verte qui clignote :\n"
                 f"    commencez a bouger votre membre\n"
                 f"    (flexion-extension) en suivant\n"
                 f"    le rythme du clignotement\n\n"
-                f"4 - Arretez-vous quand la croix disparait\n\n"
-                f"Appuyez sur une touche pour continuer..."
+                f"3 - Arretez-vous quand la croix disparait\n\n"
+                f"Appuyez sur \"S\" pour continuer..."
             )
         else:
             return (
@@ -122,7 +118,7 @@ class MotorTask(BaseTask):
                 f"    (flexion-extension) en suivant\n"
                 f"    le rythme du clignotement\n\n"
                 f"4 - Arretez-vous quand la croix disparait\n\n"
-                f"Appuyez sur une touche pour continuer..."
+                f"Appuyez sur \"S\" pour continuer..."
             )
 
     def _get_block_instruction(self, block_idx, block_def):

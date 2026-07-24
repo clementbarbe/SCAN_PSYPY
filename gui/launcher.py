@@ -24,7 +24,7 @@ class ExperimentMenu(QMainWindow):
         super().__init__()
         self.setWindowTitle("Configuration Experimentale")
         self.setStyleSheet(STYLESHEET)
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(800)
         self.final_config = None
         self._last = last_config or {}
         self._build()
@@ -58,7 +58,7 @@ class ExperimentMenu(QMainWindow):
         self.spin_ses = QSpinBox()
         self.spin_ses.setRange(1, 20)
         self.spin_ses.setValue(self._last.get('session', 1))
-        self.spin_ses.setFixedWidth(55)
+        self.spin_ses.setFixedWidth(100)
         g.addWidget(self.spin_ses, 0, 3)
 
         g.addWidget(QLabel("Ecran :"), 0, 4)
@@ -66,14 +66,14 @@ class ExperimentMenu(QMainWindow):
         n_screens = max(1, len(QApplication.screens()))
         self.spin_scr.setRange(0, n_screens - 1)
         self.spin_scr.setValue(self._last.get('screen', 0))
-        self.spin_scr.setFixedWidth(55)
+        self.spin_scr.setFixedWidth(100)
         g.addWidget(self.spin_scr, 0, 5)
 
         g.addWidget(QLabel("Mode :"), 0, 6)
         self.combo_mode = QComboBox()
         self.combo_mode.addItems(["PC", "fMRI"])
         self.combo_mode.setCurrentText(self._last.get('mode', 'PC'))
-        self.combo_mode.setFixedWidth(70)
+        self.combo_mode.setFixedWidth(100)
         g.addWidget(self.combo_mode, 0, 7)
 
         # Row 1: checkboxes
